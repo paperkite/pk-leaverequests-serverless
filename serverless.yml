@@ -1,0 +1,65 @@
+service: pk-leaverequests-serverless
+
+provider:
+  name: aws
+  stage: production
+  runtime: nodejs8.10
+  profile: pk-internal
+  region: us-east-1
+  environment:
+    CLIENT_ID: ${ssm:/leave-requests/client-id}
+    CLIENT_SECRET: ${ssm:/leave-requests/client-secret}
+    VERIFICATION_TOKEN: ${ssm:/leave-requests/verification-token}
+    SLACK_ACCESS_TOKEN: ${ssm:/leave-requests/slack-access-token}
+    SLACK_SIGNING_SECRET: ${ssm:/leave-requests/slack-signing-secret}
+    SLACK_CHANNEL: ${ssm:/leave-requests/slack-channel}
+    DYNAMODB_TABLE: ${self:service}-${opt:stage, self:provider.stage}
+  iamRoleStatements:
+    - Effect: Allow
+      Action:
+        - dynamodb:Query
+        - dynamodb:Scan
+        - dynamodb:GetItem
+        - dynamodb:PutItem
+        - dynamodb:UpdateItem
+        - dynamodb:DeleteItem
+      Resource: "arn:aws:dynamodb:${opt:region, self:provider.region}:*:table/${self:provider.environment.DYNAMODB_TABLE}"
+
+
+functions:
+  # handle the slash command and present the dialog
+  request:
+    handler: src/request.handler
+    events:
+      ## Slash Commands
+      - http:
+          path: /request
+          method: post
+
+  # post into the right channel, and handle the action buttons  
+  approve:
+    handler: src/approve.handler
+    events:
+      - http:
+          path: /approve
+          method: post
+
+
+resources:
+  Resources:
+    LeaveRequestsDynamoDbTable:
+      Type: 'AWS::DynamoDB::Table'
+      DeletionPolicy: Retain
+      Properties:
+        AttributeDefinitions:
+          -
+            AttributeName: id
+            AttributeType: S
+        KeySchema:
+          -
+            AttributeName: id
+            KeyType: HASH
+        ProvisionedThroughput:
+          ReadCapacityUnits: 1
+          WriteCapacityUnits: 5
+        TableName: ${self:provider.environment.DYNAMODB_TABLE}
