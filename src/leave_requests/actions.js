@@ -1,15 +1,17 @@
 'use strict';
 
-const token = process.env.SLACK_ACCESS_TOKEN;
+const token = process.env.SLACK_BOT_ACCESS_TOKEN;
+const profile_token = process.env.SLACK_OAUTH_ACCESS_TOKEN
 const channel = process.env.SLACK_CHANNEL;
+const approver_custom_field = 'XfGQ6Q53J6'
 
 const AWS = require('aws-sdk');
 const dynamo = new AWS.DynamoDB.DocumentClient();
 const axios = require('axios');
 const dedent = require('dedent');
-const qs = require('querystring')
 const moment = require('moment-timezone');
 const slack = require('slack');
+const approvers = require('./approvers.json');
 
 async function handleSubmission(payload) {
 
@@ -23,6 +25,7 @@ async function handleSubmission(payload) {
 
     if(fromDate.isValid() && toDate.isValid()) {
         submission.person = await fetchUser(person.id);
+        submission.approver = fetchApprover(submission.person);
         submission.fromMoment = fromDate;
         submission.toMoment = toDate;
     
@@ -35,7 +38,7 @@ async function handleSubmission(payload) {
         payload.channelResponse = channelResponse
 
         // Then follow-up and create a thread with instructions and tag the right people
-        const threadMessage = formatThreadMessage(channelResponse.ts, submission.person.profile.first_name);
+        const threadMessage = formatThreadMessage(channelResponse.ts, submission);
 
         await Promise.all([
             postToSlack(threadMessage), 
@@ -79,8 +82,9 @@ function saveRequest(payload) {
             id: payload.channelResponse.ts,
             person: {
                 id: payload.user.id,
-                name: payload.submission.person.profile.first_name
+                name: payload.submission.person.first_name
             },
+            approver_id: payload.submission.approver,
             type: payload.submission.type,
             from: payload.submission.from,
             to: payload.submission.to,
@@ -120,8 +124,8 @@ function markRequestAsApproved(id, is_approved, approver) {
 }
 
 function formatChannelMessage(submission) {
-    const from = moment(submission.from, 'DD/MM/YYYY').format('MMM Do YYYY');
-    const to = moment(submission.to, 'DD/MM/YYYY').format('MMM Do YYYY');
+    const from = moment(submission.from, 'DD/MM/YYYY').format('ddd Do MMM, YYYY');
+    const to = moment(submission.to, 'DD/MM/YYYY').format('ddd Do MMM, YYYY');
     return {
         "token": token,
         "channel": channel,
@@ -130,9 +134,9 @@ function formatChannelMessage(submission) {
             {
                 "title": `New ${submission.type} Leave Request`,
                 "text": `<@${submission.person.id}> has requested to take *${submission.hours}* hour(s) of ${submission.type} leave. Details of this request are below:`,
-                "callback_id": "approve_leave",
-                "author_name": submission.person.profile.real_name,
-                "author_icon": submission.person.profile.image_24,
+                "callback_id": "leave_request_approve",
+                "author_name": submission.person.real_name,
+                "author_icon": submission.person.image_24,
                 "fields": [
                     {
                         "title": "Start Date",
@@ -164,7 +168,7 @@ function formatChannelMessage(submission) {
                         "style": "primary",
                         "confirm": {
                             "title": "Are you sure?",
-                            "text": `A DM will be sent to ${submission.person.profile.first_name} to let them know its approved.`,
+                            "text": `A DM will be sent to ${submission.person.first_name} to let them know its approved.`,
                             "ok_text": "Yes",
                             "dismiss_text": "No"
                         }
@@ -177,7 +181,7 @@ function formatChannelMessage(submission) {
                         "value": "decline",
                         "confirm": {
                             "title": "Are you sure?",
-                            "text": `Don't forget to follow up with ${submission.person.profile.first_name} and let them know why it has been declined.`,
+                            "text": `Don't forget to follow up with ${submission.person.first_name} and let them know why it has been declined.`,
                             "ok_text": "Yes",
                             "dismiss_text": "No"
                         }
@@ -212,18 +216,27 @@ function formatUpdatedChannelMessage(original_message, is_approved, approver) {
     };
 }
 
-function formatThreadMessage(thread_ts, name) {
+function formatThreadMessage(thread_ts, submission) {
+    var text = undefined;
+    if('default' == submission.approver) {
+        text = dedent`Use this thread to verify if the request can be approved. Things you should check:
+                       - Check Forecast to see if there's any clash with booked-in work (<!subteam^SC9MWQTK9>)
+                       - Check in Smart Payroll to make sure they enough leave accrued (<@UC39KEXSA>)`
+    }
+    else {
+        text = dedent`Hey <@${submission.approver}>, use this thread to verify if the request can be approved.`
+    }
+
+    text += dedent`\n\nOnce it's been decided hit that Approve button and \
+                   ${submission.person.first_name} will be sent a message to submit \
+                   the request formally to Smart Payroll for approval. If you decline \
+                   they'll get a message to come and talk to you about it.`
+
     return {
         "token": token,
         "channel": channel,
         "thread_ts": thread_ts,
-        "text": dedent`Use this thread to verify if the request can be approved. Things you should check:
-                       - Check Forecast to see if there's any clash with booked-in work (<!subteam^SC9MWQTK9>)
-                       - Check in Smart Payroll to make sure they enough leave accrued (<@UC39KEXSA>)
-
-                       Once that's all been checked the Approve button can be clicked, and ${name} will be \
-                       sent a message to submit the request formally to Smart Payroll for approval.
-        `
+        "text": text
     }
 }
 
@@ -305,32 +318,21 @@ function postAcknowledgement(response_url) {
 }
 
 function fetchUser(user) {
-    return slack.users.info({ token, user }).then((response) => { 
-        return response.user; 
+    return slack.users.profile.get({ token: profile_token, include_labels: true, user }).then((response) => { 
+        console.log(response);
+        response.profile.id = user
+        return response.profile; 
     });
 }
 
-// The function that AWS Lambda will call
-exports.handler = async (event, context, callback) => {
-    var payload = JSON.parse(qs.parse(event.body).payload);
+function fetchApprover(user) {
+    if(user.fields[approver_custom_field]) {
+        return user.fields[approver_custom_field].value;
+    }
+    return 'default';
+}
 
-    var statusCode = 200;
-    var success = false;
-    var responseBody = { errors: [  ] }
-    if('dialog_submission' == payload.type) {
-        responseBody = await handleSubmission(payload);
-    }
-    else if ('interactive_message' == payload.type) {
-        if('approve_leave' == payload.callback_id) {
-            const action = payload.actions.find(action => action.name == 'action');
-            responseBody = await handleApproval(payload, action);
-        }
-    }
-    else {
-        console.error(`Unknown event type ${payload.type}`, payload);
-    }
-
-    const response = { statusCode };
-    if(responseBody !== true) { response.body = JSON.stringify(responseBody); }
-    callback(null, response);
-};
+module.exports = {
+    handleSubmission,
+    handleApproval
+}

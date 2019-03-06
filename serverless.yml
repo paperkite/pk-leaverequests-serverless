@@ -10,7 +10,8 @@ provider:
     CLIENT_ID: ${ssm:/leave-requests/client-id}
     CLIENT_SECRET: ${ssm:/leave-requests/client-secret}
     VERIFICATION_TOKEN: ${ssm:/leave-requests/verification-token}
-    SLACK_ACCESS_TOKEN: ${ssm:/leave-requests/slack-access-token}
+    SLACK_BOT_ACCESS_TOKEN: ${ssm:/leave-requests/slack-bot-access-token}
+    SLACK_OAUTH_ACCESS_TOKEN: ${ssm:/leave-requests/slack-oauth-access-token}
     SLACK_SIGNING_SECRET: ${ssm:/leave-requests/slack-signing-secret}
     SLACK_CHANNEL: ${ssm:/leave-requests/slack-channel}
     DYNAMODB_TABLE: ${self:service}-${opt:stage, self:provider.stage}
@@ -28,21 +29,33 @@ provider:
 
 functions:
   # handle the slash command and present the dialog
-  request:
-    handler: src/request.handler
+  leave_request:
+    handler: src/leave_requests/slash_command.handler
     events:
       ## Slash Commands
       - http:
-          path: /request
+          path: /leave/request
           method: post
 
-  # post into the right channel, and handle the action buttons  
-  approve:
-    handler: src/approve.handler
+  leave_reminder:
+    handler: src/leave_requests/reminder.handle
+    # events:
+    #   - schedule: rate(1 hour)
+  
+  action_router:
+    handler: src/action_router.handler
     events:
       - http:
-          path: /approve
+          path: /actions
           method: post
+
+  # # post into the right channel, and handle the action buttons  
+  # approve:
+  #   handler: src/approve.handler
+  #   events:
+  #     - http:
+  #         path: /approve
+  #         method: post
 
 
 resources:

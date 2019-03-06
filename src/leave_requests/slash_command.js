@@ -2,7 +2,7 @@
 
 const qs = require('querystring')
 const slack = require('slack');
-const token = process.env.SLACK_ACCESS_TOKEN;
+const token = process.env.SLACK_BOT_ACCESS_TOKEN;
 
 // The function that AWS Lambda will call
 exports.handler = async (event, context, callback) => {
@@ -13,7 +13,7 @@ exports.handler = async (event, context, callback) => {
   const dialog = JSON.stringify({
     title: 'Leave Request',
     state: JSON.stringify({ response_url: payload.response_url }),
-    callback_id: 'request_leave',
+    callback_id: 'leave_request_request',
     submit_label: 'Submit',
     elements: [
       {
