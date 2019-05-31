@@ -13,7 +13,7 @@ provider:
     SLACK_BOT_ACCESS_TOKEN: ${ssm:/leave-requests/slack-bot-access-token}
     SLACK_OAUTH_ACCESS_TOKEN: ${ssm:/leave-requests/slack-oauth-access-token}
     SLACK_SIGNING_SECRET: ${ssm:/leave-requests/slack-signing-secret}
-    SLACK_CHANNEL: ${ssm:/leave-requests/slack-channel}
+    
     DYNAMODB_TABLE: ${self:service}-${opt:stage, self:provider.stage}
   iamRoleStatements:
     - Effect: Allow
@@ -36,6 +36,8 @@ functions:
       - http:
           path: /leave/request
           method: post
+    environment:
+      SLACK_CHANNEL: ${ssm:/leave-requests/slack-channel}
 
   leave_reminder:
     handler: src/leave_requests/reminder.handle
@@ -48,15 +50,30 @@ functions:
       - http:
           path: /actions
           method: post
+    environment:
+      LEAVE_SLACK_CHANNEL: ${ssm:/leave-requests/slack-channel}
+      TRAVEL_SLACK_CHANNEL: ${ssm:/flight-requests/slack-channel}
+      REMOTE_SLACK_CHANNEL: ${ssm:/remote-requests/slack-channel}
 
-  # # post into the right channel, and handle the action buttons  
-  # approve:
-  #   handler: src/approve.handler
-  #   events:
-  #     - http:
-  #         path: /approve
-  #         method: post
+  flight_request:
+    handler: src/flight_requests/slash_command.handler
+    events:
+      ## Slash Commands
+      - http:
+          path: /flight/request
+          method: post
+    environment:
+      SLACK_CHANNEL: ${ssm:/flight-requests/slack-channel}
 
+  remote_work_request:
+    handler: src/remote_work_requests/slash_command.handler
+    events:
+      ## Slash Commands
+      - http:
+          path: /remote_work/request
+          method: post
+    environment:
+      SLACK_CHANNEL: ${ssm:/remote-requests/slack-channel}
 
 resources:
   Resources:

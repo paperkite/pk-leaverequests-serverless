@@ -2,7 +2,7 @@
 
 const token = process.env.SLACK_BOT_ACCESS_TOKEN;
 const profile_token = process.env.SLACK_OAUTH_ACCESS_TOKEN
-const channel = process.env.SLACK_CHANNEL;
+const channel = process.env.LEAVE_SLACK_CHANNEL;
 const approver_custom_field = 'XfGQ6Q53J6'
 
 const AWS = require('aws-sdk');
@@ -11,7 +11,6 @@ const axios = require('axios');
 const dedent = require('dedent');
 const moment = require('moment-timezone');
 const slack = require('slack');
-const approvers = require('./approvers.json');
 
 async function handleSubmission(payload) {
 
@@ -43,7 +42,7 @@ async function handleSubmission(payload) {
         await Promise.all([
             postToSlack(threadMessage), 
             saveRequest(payload), 
-            postAcknowledgement(payload.response_url)
+            postAcknowledgement(payload.response_url, submission.approver)
             ]);
 
         return true;
@@ -59,17 +58,17 @@ async function handleSubmission(payload) {
 async function handleApproval(payload, action){
     console.log(payload, action);
     const is_approved = action.value == 'approve'
-    const request = await loadRequest(payload.message_ts);
+    const request = await loadRequest(payload.message.ts);
     const dm = await openSlackDM(request.person);
     const requesterMessage = formatRequesterNotification(request, dm, is_approved, payload.user);
-    const updateMessage = formatUpdatedChannelMessage(payload.original_message, is_approved, payload.user)
-    const threadUpdate = formatApprovedThreadMessage(payload.message_ts, request.person.name, is_approved, payload.user)
+    const updateMessage = formatUpdatedChannelMessage(payload.message, is_approved, payload.user)
+    const threadUpdate = formatApprovedThreadMessage(payload.message.ts, request.person.name, is_approved, payload.user)
 
     await Promise.all([
         postToSlack(requesterMessage),
         postToSlack(threadUpdate),
         updateSlackMessage(updateMessage),
-        markRequestAsApproved(payload.message_ts, is_approved, payload.user)
+        markRequestAsApproved(payload.message.ts, is_approved, payload.user)
     ]);
 
     return true;
@@ -114,7 +113,7 @@ function markRequestAsApproved(id, is_approved, approver) {
         UpdateExpression: "SET approved_at = :approved_at, approved_by = :approved_by, was_approved = :was_approved",
         ExpressionAttributeValues: {
             ":approved_at": moment().tz('Pacific/Auckland').format(),
-            ":approved_by": approver.name,
+            ":approved_by": approver.username,
             ":was_approved": is_approved
         }
     }).promise().then((response) => {
@@ -124,95 +123,137 @@ function markRequestAsApproved(id, is_approved, approver) {
 }
 
 function formatChannelMessage(submission) {
-    const from = moment(submission.from, 'DD/MM/YYYY').format('ddd Do MMM, YYYY');
-    const to = moment(submission.to, 'DD/MM/YYYY').format('ddd Do MMM, YYYY');
+    var dateString = formatRequestDateString(submission);
+
     return {
         "token": token,
         "channel": channel,
         "text": "",
-        "attachments": [
+        "blocks": [
             {
-                "title": `New ${submission.type} Leave Request`,
-                "text": `<@${submission.person.id}> has requested to take *${submission.hours}* hour(s) of ${submission.type} leave. Details of this request are below:`,
-                "callback_id": "leave_request_approve",
-                "author_name": submission.person.real_name,
-                "author_icon": submission.person.image_24,
-                "fields": [
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": `<@${submission.person.id}> has requested to take *${submission.hours}* hour(s) of ${submission.type} leave.`
+                }
+            },
+            {
+                "type": "actions",
+                "elements": [
                     {
-                        "title": "Start Date",
-                        "value": from,
-                        "short": true
-                    },
-                    {
-                        "title": "End Date",
-                        "value": to,
-                        "short": true
-                    },
-                    {
-                        "title": "Hours",
-                        "value": submission.hours,
-                        "short": true
-                    },
-                    {
-                        "title": "Details",
-                        "value": submission.description,
-                        "short": false
-                    }
-                ],
-                "actions": [
-                    {
-                        "name": "action",
-                        "text": "Approve",
                         "type": "button",
+                        "text": {
+                            "type": "plain_text",
+                            "emoji": true,
+                            "text": ":white_check_mark: Approve"
+                        },
+                        "action_id": "leave_request_approve",
                         "value": "approve",
-                        "style": "primary",
                         "confirm": {
-                            "title": "Are you sure?",
-                            "text": `A DM will be sent to ${submission.person.first_name} to let them know its approved.`,
-                            "ok_text": "Yes",
-                            "dismiss_text": "No"
+                            "title": {
+                                "type": "plain_text",
+                                "text": "Are you sure?"
+                            },
+                            "text": {
+                                "type": "plain_text",
+                                "text": `A DM will be sent to ${submission.person.first_name} to let them know its approved.`
+                            },
+                            "confirm": {
+                                "type": "plain_text",
+                                "text": "Yes, I approve"
+                            },
+                            "deny": {
+                                "type": "plain_text",
+                                "text": "Not yet"
+                            }
                         }
                     },
                     {
-                        "name": "action",
-                        "text": "Decline",
-                        "style": "danger",
                         "type": "button",
+                        "text": {
+                            "type": "plain_text",
+                            "emoji": true,
+                            "text": ":x: Decline"
+                        },
+                        "action_id": "leave_request_decline",
                         "value": "decline",
                         "confirm": {
-                            "title": "Are you sure?",
-                            "text": `Don't forget to follow up with ${submission.person.first_name} and let them know why it has been declined.`,
-                            "ok_text": "Yes",
-                            "dismiss_text": "No"
+                            "title": {
+                                "type": "plain_text",
+                                "text": "Are you sure?"
+                            },
+                            "text": {
+                                "type": "mrkdwn",
+                                "text": dedent`A DM will be sent to ${submission.person.first_name} to let them know its approved. \
+                                               *Don't forget to follow up with ${submission.person.first_name} and let them know \
+                                               why it has been declined.*`
+                            },
+                            "confirm": {
+                                "type": "plain_text",
+                                "text": "Yes, decline it"
+                            },
+                            "deny": {
+                                "type": "plain_text",
+                                "text": "Not yet"
+                            }
                         }
                     }
                 ]
+            },
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": dedent`*Type:* ${submission.type} Leave
+                                   *When:* ${dateString}
+                                   *Hours:* ${submission.hours}
+                                   *Comments:* ${submission.description || ''}`
+                }
             }
         ]
     }
 }
 
+function formatRequestDateString(submission) {
+    const from = moment(submission.from, 'DD/MM/YYYY');
+    const to = moment(submission.to, 'DD/MM/YYYY');
+    var dateString = from.format('ddd Do MMM');
+    
+    // only show the year if the request spans different years, 
+    // or the request is not for the current year
+    if(!from.isSame(to, 'year') || !from.isSame(moment(), 'year')) {
+        dateString += ', ' + from.format('YYYY');
+    }
+    // only show the to date if the request spans several days
+    if(!from.isSame(to, 'day')) {
+        dateString += ' - ' + to.format('ddd Do MMM');
+        if(!to.isSame(moment(), 'year')) {
+            dateString += ', ' + to.format('YYYY')
+        }
+    }
+
+    return dateString;
+}
+
 function formatUpdatedChannelMessage(original_message, is_approved, approver) {
     // strip the actions
-    var attachments = original_message.attachments;
-    attachments[0].actions = [];
+    var approver_block = { type: "section", text: { type: "mrkdwn" } }
     if(is_approved) {
-        attachments[0].fields.push({
-            "value": `:approved: *<@${approver.id}> approved this request*`
-        })
+        approver_block.text.text = `:white_check_mark: *<@${approver.id}> approved this request*`
     }
     else {
-        attachments[0].fields.push({
-            "value": `:x: *<@${approver.id}> declined this request*`
-        })
+        approver_block.text.text = `:x: *<@${approver.id}> declined this request*`
     }
+
+    var blocks = original_message.blocks;
+    blocks[1] = approver_block
 
     return {
         "token": token,
         "channel": channel,
         "ts": original_message.ts,
-        "text": "",
-        "attachments": attachments
+        "text": original_message.text,
+        "blocks": blocks
     };
 }
 
@@ -229,7 +270,7 @@ function formatThreadMessage(thread_ts, submission) {
 
     text += dedent`\n\nOnce it's been decided hit that Approve button and \
                    ${submission.person.first_name} will be sent a message to submit \
-                   the request formally to Smart Payroll for approval. If you decline \
+                   the request formally to Smart Payroll. If you decline \
                    they'll get a message to come and talk to you about it.`
 
     return {
@@ -244,7 +285,7 @@ function formatApprovedThreadMessage(thread_ts, requester_name, is_approved, app
     var message = undefined
     if(is_approved) {
         message = dedent`:tick: <@${approver.id}> approved this request. ${requester_name} has been sent a DM \
-                         to submit the request to Smart Payroll for finance approval.
+                         to submit the request to Smart Payroll.
 
                          p.s. <@${approver.id}> Make sure you update Forecast and the Leave Calendar!`
     }
@@ -270,8 +311,9 @@ function formatRequesterNotification(request, dm_channel, is_approved, approver)
         message = dedent`Hey, good news! Your ${request.type} leave request starting ${request.from} has been \
                          approved :thumbsup:.
                          
-                         The last thing you've gotta do is submit your request through Smart Payroll \
-                         (unfortunately we can't automate this step, it has to come from you :upside_down_face:).
+                         The last thing you've gotta do is submit your request through Smart Payroll. Please set \
+                         <@UC39KEXSA> as the approver for your request. Unfortunately we can't automate this step, \
+                         it has to come from you :upside_down_face:.
                          
                          If you have any followup questions chat to <@${approver.id}>, they know the deal.`
     }
@@ -308,11 +350,19 @@ function openSlackDM(person) {
     });
 }
 
-function postAcknowledgement(response_url) {
+function postAcknowledgement(response_url, approver) {
+
+    var no_response = '';
+    if('default' == approver) {
+        no_response = "get in touch with one of the <!subteam^SC9MWQTK9>";
+    }
+    else {
+        no_response = `get in touch with <@${approver}>`;
+    }
+
     return axios.post(response_url, { 
         text: dedent`Submitted! Your request is being reviewed and you should get an update in \
-                     the next day or so. If you don't get a response, get in touch with one of \
-                     the <!subteam^SC9MWQTK9>`, 
+                     the next day or so. If you don't get a response, ${no_response}`, 
         response_type: "ephemeral" 
     });
 }
