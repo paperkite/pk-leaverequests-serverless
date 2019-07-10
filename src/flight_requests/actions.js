@@ -4,9 +4,9 @@ const token = process.env.SLACK_BOT_ACCESS_TOKEN;
 const channel = process.env.TRAVEL_SLACK_CHANNEL;
 const travel_agent = 'UFJ6DNCAJ'
 
-const axios = require('axios');
+const axios = require('../event_requests/node_modules/axios');
 const dedent = require('dedent');
-const slack = require('slack');
+const slack = require('../event_requests/node_modules/slack');
 
 async function handleSubmission(payload) {
 
@@ -14,11 +14,11 @@ async function handleSubmission(payload) {
     const person = payload.user
 
     console.log(`Handling flight request from ${person.name}`, submission);
-    
+
     const channelMessage = formatChannelMessage(submission, person);
 
     await Promise.all([
-        postToSlack(channelMessage), 
+        postToSlack(channelMessage),
         postAcknowledgement(payload.response_url)
     ]);
 
@@ -27,14 +27,14 @@ async function handleSubmission(payload) {
 }
 
 function formatChannelMessage(submission, requester) {
-    
+
     var request_details = dedent`*Who:* ${submission.who}
                                  *Departing:* ${submission.departing}
                                  *Returning:* ${submission.returning}
                                  *Reference:* ${submission.client_ref}
                                  *Extra Details:* ${submission.details}`
 
-    if(submission.flexi_owner) {
+    if (submission.flexi_owner) {
         request_details += `\n\n<@${submission.flexi_owner}> has been nominated to change the flexi flights if necessary.`
     }
 
@@ -55,9 +55,9 @@ function postToSlack(message) {
 }
 
 function postAcknowledgement(response_url) {
-    return axios.post(response_url, { 
-        text: dedent`Submitted! Follow along in the <#${channel}> channel, and make sure you say thanks to <@${travel_agent}>!`, 
-        response_type: "ephemeral" 
+    return axios.post(response_url, {
+        text: dedent`Submitted! Follow along in the <#${channel}> channel, and make sure you say thanks to <@${travel_agent}>!`,
+        response_type: "ephemeral"
     });
 }
 

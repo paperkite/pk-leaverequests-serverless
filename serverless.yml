@@ -54,6 +54,7 @@ functions:
       LEAVE_SLACK_CHANNEL: ${ssm:/leave-requests/slack-channel}
       TRAVEL_SLACK_CHANNEL: ${ssm:/flight-requests/slack-channel}
       REMOTE_SLACK_CHANNEL: ${ssm:/remote-requests/slack-channel}
+      EVENT_SLACK_CHANNEL: ${ssm:/event-requests/slack-channel}
 
   flight_request:
     handler: src/flight_requests/slash_command.handler
@@ -74,6 +75,16 @@ functions:
           method: post
     environment:
       SLACK_CHANNEL: ${ssm:/remote-requests/slack-channel}
+
+  event_request:
+    handler: src/event_requests/slash_command.handler
+    events:
+      ## Slash Commands
+      - http:
+          path: /event/request
+          method: post
+    environment:
+      SLACK_CHANNEL: ${ssm:/event-requests/slack-channel}
 
 resources:
   Resources:
