@@ -4,9 +4,9 @@ const token = process.env.SLACK_BOT_ACCESS_TOKEN;
 const channel = process.env.TRAVEL_SLACK_CHANNEL;
 const travel_agent = 'UFJ6DNCAJ'
 
-const axios = require('../event_requests/node_modules/axios');
+const axios = require('axios');
 const dedent = require('dedent');
-const slack = require('../event_requests/node_modules/slack');
+const slack = require('slack');
 
 async function handleSubmission(payload) {
 
