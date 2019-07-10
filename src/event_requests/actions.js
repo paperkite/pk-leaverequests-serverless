@@ -134,7 +134,7 @@ function formatChannelMessage(submission) {
         "type": "section",
         "text": {
           "type": "mrkdwn",
-          "text": `<@${submission.person.id}> has requested to take *${submission.hours}* hour(s) of ${submission.type} leave.`
+          "text": `<@${submission.person.id}> has requested to attend ${submission.event_name}.`
         }
       },
       {
@@ -204,10 +204,15 @@ function formatChannelMessage(submission) {
         "type": "section",
         "text": {
           "type": "mrkdwn",
-          "text": dedent`*Type:* ${submission.type} Leave
-                                   *When:* ${dateString}
-                                   *Hours:* ${submission.hours}
-                                   *Comments:* ${submission.description || ''}`
+          "text": dedent`*Event name:* ${submission.event_name}
+                                   *Description:* ${submission.event_description}
+                                   *Location:* ${submission.event_location}
+                                   *Date(s):* ${this.formatRequestDateString(submission)}
+                                   *People:* ${submission.event_attendees}
+                                   *PK benefit:* ${submission.pk_benefit || '---'}
+                                   *Personal benefit:* ${submission.personal_benefit || '---'}
+                                   *Requested financial cover:* ${submission.cost || '---'}
+                                   *Vital dates:* ${submission.vital_dates || '---'}`
         }
       }
     ]
@@ -261,16 +266,15 @@ function formatThreadMessage(thread_ts, submission) {
   var text = undefined;
   if ('default' == submission.approver) {
     text = dedent`Use this thread to verify if the request can be approved. Things you should check:
-                       - Check Forecast to see if there's any clash with booked-in work (<!subteam^SC9MWQTK9>)
-                       - Check in Smart Payroll to make sure they enough leave accrued (<@UC39KEXSA>)`
+                       - Check Forecast to see if there's any clash with booked-in work (<!subteam^SC9MWQTK9>)`
   }
   else {
     text = dedent`Hey <@${submission.approver}>, use this thread to verify if the request can be approved.`
   }
 
   text += dedent`\n\nOnce it's been decided hit that Approve button and \
-                   ${submission.person.first_name} will be sent a message to submit \
-                   the request formally to Smart Payroll. If you decline \
+                   ${submission.person.first_name} will be sent a message to \
+                   let them know. If you decline, \
                    they'll get a message to come and talk to you about it.`
 
   return {
@@ -285,9 +289,9 @@ function formatApprovedThreadMessage(thread_ts, requester_name, is_approved, app
   var message = undefined
   if (is_approved) {
     message = dedent`:tick: <@${approver.id}> approved this request. ${requester_name} has been sent a DM \
-                         to submit the request to Smart Payroll.
+                         letting them know.
 
-                         p.s. <@${approver.id}> Make sure you update Forecast and the Leave Calendar!`
+                         p.s. <@${approver.id}> Make sure you update Forecast and the PK Calendar!`
   }
   else {
     message = dedent`:x: <@${approver.id}> declined this request. ${requester_name} has been sent a DM \
@@ -308,12 +312,8 @@ function formatApprovedThreadMessage(thread_ts, requester_name, is_approved, app
 function formatRequesterNotification(request, dm_channel, is_approved, approver) {
   var message = undefined;
   if (is_approved) {
-    message = dedent`Hey, good news! Your ${request.type} leave request starting ${request.from} has been \
+    message = dedent`Hey, good news! Your request to attend ${request.event_name} starting ${request.from} has been \
                          approved :thumbsup:.
-                         
-                         The last thing you've gotta do is submit your request through Smart Payroll. Please set \
-                         <@UC39KEXSA> as the approver for your request. Unfortunately we can't automate this step, \
-                         it has to come from you :upside_down_face:.
                          
                          If you have any followup questions chat to <@${approver.id}>, they know the deal.`
   }
