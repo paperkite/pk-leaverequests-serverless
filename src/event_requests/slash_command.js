@@ -53,7 +53,7 @@ exports.handler = async (event, context, callback) => {
                 hint: "e.g. Annual developer conference held by Google"
             },
             {
-                label: 'How will PK benefit from supporting your attendance?',
+                label: 'How will PK benefit from your attendance?',
                 type: 'textarea',
                 name: 'pk_benefit',
                 optional: true,
@@ -65,8 +65,8 @@ exports.handler = async (event, context, callback) => {
                 optional: true,
             },
             {
-                label: 'What is the total cost that you would like PaperKite to cover?',
-                type: 'textarea',
+                label: 'Total cost that you\'d like PK to cover',
+                type: 'text',
                 name: 'cost',
                 optional: true,
                 hint: "Enter $ value here",
@@ -81,7 +81,9 @@ exports.handler = async (event, context, callback) => {
         ]
     });
 
-    slack.dialog.open({ token, dialog, trigger_id });
+
+    slack.dialog.open({ token, dialog, trigger_id })
+        .catch((error => console.log(error)));
 
     callback(null, {
         statusCode: 200,

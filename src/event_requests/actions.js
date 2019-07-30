@@ -2,7 +2,7 @@
 
 const token = process.env.SLACK_BOT_ACCESS_TOKEN;
 const profile_token = process.env.SLACK_OAUTH_ACCESS_TOKEN
-const channel = process.env.LEAVE_SLACK_CHANNEL;
+const channel = process.env.EVENT_SLACK_CHANNEL;
 const approver_custom_field = 'XfGQ6Q53J6'
 
 const AWS = require('aws-sdk');
@@ -207,7 +207,7 @@ function formatChannelMessage(submission) {
           "text": dedent`*Event name:* ${submission.event_name}
                                    *Description:* ${submission.event_description}
                                    *Location:* ${submission.event_location}
-                                   *Date(s):* ${this.formatRequestDateString(submission)}
+                                   *Date(s):* ${dateString}
                                    *People:* ${submission.event_attendees}
                                    *PK benefit:* ${submission.pk_benefit || '---'}
                                    *Personal benefit:* ${submission.personal_benefit || '---'}
