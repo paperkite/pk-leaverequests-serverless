@@ -10,8 +10,8 @@ function loadOutstandingRequests(id) {
     const now = moment().tz('Pacific/Auckland').format();
     const last_hour = moment().tz('Pacific/Auckland').subtract(1, 'hour').format();
     return dynamo.scan({
-        TableName: process.env.DYNAMODB_TABLE,
-        FilterExpression : 'approved_at = :approved_at AND created_at BETWEEN :last_hour AND :now',
+        TableName: process.env.LEAVE_REQUESTS_DYNAMODB_TABLE,
+        FilterExpression: 'approved_at = :approved_at AND created_at BETWEEN :last_hour AND :now',
         ExpressionAttributeValues: { ':approved_at': null, ':last_hour': last_hour, ':now': now }
     }).promise().then((response) => {
         console.log(response);
@@ -20,7 +20,7 @@ function loadOutstandingRequests(id) {
 }
 
 module.exports.handle = async () => {
-    
+
     const submission = await loadOutstandingRequests()
 
-  };
+};

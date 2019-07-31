@@ -76,7 +76,7 @@ async function handleApproval(payload, action) {
 
 function saveRequest(payload) {
   return dynamo.put({
-    TableName: process.env.DYNAMODB_TABLE,
+    TableName: process.env.EVENT_REQUESTS_DYNAMODB_TABLE,
     Item: {
       id: payload.channelResponse.ts,
       person: {
@@ -99,7 +99,7 @@ function saveRequest(payload) {
 
 function loadRequest(id) {
   return dynamo.get({
-    TableName: process.env.DYNAMODB_TABLE,
+    TableName: process.env.EVENT_REQUESTS_DYNAMODB_TABLE,
     Key: { id: id }
   }).promise().then((response) => {
     return response.Item
@@ -108,7 +108,7 @@ function loadRequest(id) {
 
 function markRequestAsApproved(id, is_approved, approver) {
   return dynamo.update({
-    TableName: process.env.DYNAMODB_TABLE,
+    TableName: process.env.EVENT_REQUESTS_DYNAMODB_TABLE,
     Key: { id: id },
     UpdateExpression: "SET approved_at = :approved_at, approved_by = :approved_by, was_approved = :was_approved",
     ExpressionAttributeValues: {

@@ -13,8 +13,9 @@ provider:
     SLACK_BOT_ACCESS_TOKEN: ${ssm:/leave-requests/slack-bot-access-token}
     SLACK_OAUTH_ACCESS_TOKEN: ${ssm:/leave-requests/slack-oauth-access-token}
     SLACK_SIGNING_SECRET: ${ssm:/leave-requests/slack-signing-secret}
-    
-    DYNAMODB_TABLE: ${self:service}-${opt:stage, self:provider.stage}
+
+    LEAVE_REQUESTS_DYNAMODB_TABLE: ${self:service}-${opt:stage, self:provider.stage}
+    EVENT_REQUESTS_DYNAMODB_TABLE: eventrequests-${opt:stage, self:provider.stage}
   iamRoleStatements:
     - Effect: Allow
       Action:
@@ -24,7 +25,9 @@ provider:
         - dynamodb:PutItem
         - dynamodb:UpdateItem
         - dynamodb:DeleteItem
-      Resource: "arn:aws:dynamodb:${opt:region, self:provider.region}:*:table/${self:provider.environment.DYNAMODB_TABLE}"
+      Resource:
+        - "arn:aws:dynamodb:${opt:region, self:provider.region}:*:table/${self:provider.environment.LEAVE_REQUESTS_DYNAMODB_TABLE}"
+        - "arn:aws:dynamodb:${opt:region, self:provider.region}:*:table/${self:provider.environment.EVENT_REQUESTS_DYNAMODB_TABLE}"
 
 
 functions:
@@ -103,4 +106,20 @@ resources:
         ProvisionedThroughput:
           ReadCapacityUnits: 1
           WriteCapacityUnits: 5
-        TableName: ${self:provider.environment.DYNAMODB_TABLE}
+        TableName: ${self:provider.environment.LEAVE_REQUESTS_DYNAMODB_TABLE}
+    EventRequestsDynamoDbTable:
+      Type: 'AWS::DynamoDB::Table'
+      DeletionPolicy: Retain
+      Properties:
+        AttributeDefinitions:
+          -
+            AttributeName: id
+            AttributeType: S
+        KeySchema:
+          -
+            AttributeName: id
+            KeyType: HASH
+        ProvisionedThroughput:
+          ReadCapacityUnits: 1
+          WriteCapacityUnits: 5
+        TableName: ${self:provider.environment.EVENT_REQUESTS_DYNAMODB_TABLE}
