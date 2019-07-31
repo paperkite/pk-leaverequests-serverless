@@ -15,21 +15,22 @@ exports.handler = async (event, context, callback) => {
     var responseBody = { errors: [] }
 
     if ('dialog_submission' == payload.type) {
-        if ('leave_request_request' == payload.callback_id) {
-            responseBody = await LeaveRequests.handleSubmission(payload);
-        }
-        else if ('flight_request_request' == payload.callback_id) {
-            responseBody = await FlightRequests.handleSubmission(payload);
-        }
-        else if ('remote_request_casual_submission' == payload.callback_id) {
-            responseBody = await RemoteRequests.handleSubmission(payload);
-        }
-        else if ('event_request_request' == payload.callback_id) {
-            responseBody = await EventRequests.handleSubmission(payload);
-        }
-        else {
-            statusCode = 500
-            console.error(`Unknown callback_id ${payload.callback_id}`, payload);
+        switch (payload.callback_id) {
+            case 'leave_request_request':
+                responseBody = await LeaveRequests.handleSubmission(payload);
+                break;
+            case 'flight_request_request':
+                responseBody = await FlightRequests.handleSubmission(payload);
+                break;
+            case 'remote_request_casual_submission':
+                responseBody = await RemoteRequests.handleSubmission(payload);
+                break;
+            case 'event_request_request':
+                responseBody = await EventRequests.handleSubmission(payload);
+                break;
+            default:
+                statusCode = 500
+                console.error(`Unknown callback_id ${payload.callback_id}`, payload);
         }
     }
     else if ('block_actions' == payload.type) {
