@@ -22,14 +22,14 @@ async function handleSubmission(payload) {
     var fromDate = moment(submission.from, 'DD/MM/YYYY');
     var toDate = moment(submission.to, 'DD/MM/YYYY');
 
-    if(fromDate.isValid() && toDate.isValid()) {
+    if (fromDate.isValid() && toDate.isValid()) {
         submission.person = await fetchUser(person.id);
         submission.approver = fetchApprover(submission.person);
         submission.fromMoment = fromDate;
         submission.toMoment = toDate;
-    
+
         // First post a message to the approving channel
-        
+
         const channelMessage = formatChannelMessage(submission);
         const channelResponse = await postToSlack(channelMessage);
 
@@ -40,22 +40,22 @@ async function handleSubmission(payload) {
         const threadMessage = formatThreadMessage(channelResponse.ts, submission);
 
         await Promise.all([
-            postToSlack(threadMessage), 
-            saveRequest(payload), 
+            postToSlack(threadMessage),
+            saveRequest(payload),
             postAcknowledgement(payload.response_url, submission.approver)
-            ]);
+        ]);
 
         return true;
     }
     else {
         var response = { errors: [] };
-        if(!fromDate.isValid()) { response.errors.push({ name: 'from', error: 'Sorry, that date doesn\'t look right' })}
-        if(!toDate.isValid()) { response.errors.push({ name: 'to', error: 'Sorry, that date doesn\'t look right' })}
+        if (!fromDate.isValid()) { response.errors.push({ name: 'from', error: 'Sorry, that date doesn\'t look right' }) }
+        if (!toDate.isValid()) { response.errors.push({ name: 'to', error: 'Sorry, that date doesn\'t look right' }) }
         return response;
     }
 }
 
-async function handleApproval(payload, action){
+async function handleApproval(payload, action) {
     console.log(payload, action);
     const is_approved = action.value == 'approve'
     const request = await loadRequest(payload.message.ts);
@@ -76,7 +76,7 @@ async function handleApproval(payload, action){
 
 function saveRequest(payload) {
     return dynamo.put({
-        TableName: process.env.DYNAMODB_TABLE,
+        TableName: process.env.LEAVE_REQUESTS_DYNAMODB_TABLE,
         Item: {
             id: payload.channelResponse.ts,
             person: {
@@ -99,7 +99,7 @@ function saveRequest(payload) {
 
 function loadRequest(id) {
     return dynamo.get({
-        TableName: process.env.DYNAMODB_TABLE,
+        TableName: process.env.LEAVE_REQUESTS_DYNAMODB_TABLE,
         Key: { id: id }
     }).promise().then((response) => {
         return response.Item
@@ -108,7 +108,7 @@ function loadRequest(id) {
 
 function markRequestAsApproved(id, is_approved, approver) {
     return dynamo.update({
-        TableName: process.env.DYNAMODB_TABLE,
+        TableName: process.env.LEAVE_REQUESTS_DYNAMODB_TABLE,
         Key: { id: id },
         UpdateExpression: "SET approved_at = :approved_at, approved_by = :approved_by, was_approved = :was_approved",
         ExpressionAttributeValues: {
@@ -218,16 +218,16 @@ function formatRequestDateString(submission) {
     const from = moment(submission.from, 'DD/MM/YYYY');
     const to = moment(submission.to, 'DD/MM/YYYY');
     var dateString = from.format('ddd Do MMM');
-    
+
     // only show the year if the request spans different years, 
     // or the request is not for the current year
-    if(!from.isSame(to, 'year') || !from.isSame(moment(), 'year')) {
+    if (!from.isSame(to, 'year') || !from.isSame(moment(), 'year')) {
         dateString += ', ' + from.format('YYYY');
     }
     // only show the to date if the request spans several days
-    if(!from.isSame(to, 'day')) {
+    if (!from.isSame(to, 'day')) {
         dateString += ' - ' + to.format('ddd Do MMM');
-        if(!to.isSame(moment(), 'year')) {
+        if (!to.isSame(moment(), 'year')) {
             dateString += ', ' + to.format('YYYY')
         }
     }
@@ -238,7 +238,7 @@ function formatRequestDateString(submission) {
 function formatUpdatedChannelMessage(original_message, is_approved, approver) {
     // strip the actions
     var approver_block = { type: "section", text: { type: "mrkdwn" } }
-    if(is_approved) {
+    if (is_approved) {
         approver_block.text.text = `:white_check_mark: *<@${approver.id}> approved this request*`
     }
     else {
@@ -259,7 +259,7 @@ function formatUpdatedChannelMessage(original_message, is_approved, approver) {
 
 function formatThreadMessage(thread_ts, submission) {
     var text = undefined;
-    if('default' == submission.approver) {
+    if ('default' == submission.approver) {
         text = dedent`Use this thread to verify if the request can be approved. Things you should check:
                        - Check Forecast to see if there's any clash with booked-in work (<!subteam^SC9MWQTK9>)
                        - Check in Smart Payroll to make sure they enough leave accrued (<@UC39KEXSA>)`
@@ -283,7 +283,7 @@ function formatThreadMessage(thread_ts, submission) {
 
 function formatApprovedThreadMessage(thread_ts, requester_name, is_approved, approver) {
     var message = undefined
-    if(is_approved) {
+    if (is_approved) {
         message = dedent`:tick: <@${approver.id}> approved this request. ${requester_name} has been sent a DM \
                          to submit the request to Smart Payroll.
 
@@ -307,7 +307,7 @@ function formatApprovedThreadMessage(thread_ts, requester_name, is_approved, app
 
 function formatRequesterNotification(request, dm_channel, is_approved, approver) {
     var message = undefined;
-    if(is_approved) {
+    if (is_approved) {
         message = dedent`Hey, good news! Your ${request.type} leave request starting ${request.from} has been \
                          approved :thumbsup:.
                          
@@ -344,39 +344,39 @@ function updateSlackMessage(message) {
 }
 
 function openSlackDM(person) {
-    return slack.im.open({ token, user: person.id }).then((response) => { 
+    return slack.im.open({ token, user: person.id }).then((response) => {
         console.log(response);
-        return response.channel.id 
+        return response.channel.id
     });
 }
 
 function postAcknowledgement(response_url, approver) {
 
     var no_response = '';
-    if('default' == approver) {
+    if ('default' == approver) {
         no_response = "get in touch with one of the <!subteam^SC9MWQTK9>";
     }
     else {
         no_response = `get in touch with <@${approver}>`;
     }
 
-    return axios.post(response_url, { 
+    return axios.post(response_url, {
         text: dedent`Submitted! Your request is being reviewed and you should get an update in \
-                     the next day or so. If you don't get a response, ${no_response}`, 
-        response_type: "ephemeral" 
+                     the next day or so. If you don't get a response, ${no_response}`,
+        response_type: "ephemeral"
     });
 }
 
 function fetchUser(user) {
-    return slack.users.profile.get({ token: profile_token, include_labels: true, user }).then((response) => { 
+    return slack.users.profile.get({ token: profile_token, include_labels: true, user }).then((response) => {
         console.log(response);
         response.profile.id = user
-        return response.profile; 
+        return response.profile;
     });
 }
 
 function fetchApprover(user) {
-    if(user.fields[approver_custom_field]) {
+    if (user.fields[approver_custom_field]) {
         return user.fields[approver_custom_field].value;
     }
     return 'default';
