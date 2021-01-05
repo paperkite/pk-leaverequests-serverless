@@ -13,7 +13,7 @@
   },
   "dependencies": {
     "aws-sdk": "^2.401.0",
-    "axios": "^0.18.0",
+    "axios": "^0.21.1",
     "dedent": "^0.7.0",
     "dynasty": "^0.3.14",
     "moment": "^2.24.0",
