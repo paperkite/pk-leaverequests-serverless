@@ -16,7 +16,7 @@
     "axios": "^0.18.0",
     "dedent": "^0.7.0",
     "dynasty": "^0.3.14",
-    "moment": "^2.24.0",
+    "moment": "^2.29.4",
     "moment-timezone": "^0.5.23",
     "slack": "^11.0.1",
     "tsscmp": "^1.0.6"
